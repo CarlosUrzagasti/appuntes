@@ -1,8 +1,14 @@
 const usuarioEsquema =require('../models/user.js');
 const Role =require("../models/roles.js");
+const persona=require('../models/Persona.js')
 const jwt =require( 'jsonwebtoken');
 const config =require('../config.js');
-const utiles =require("../libs/utiles.js")
+const utiles =require("../libs/utiles.js");
+const Persona = require('../models/Persona.js');
+const moment = require('moment');
+
+const fechaNac = moment('19/06/1975', 'DD/MM/YYYY').format('YYYY-MM-DD');
+
 
  const login=async (req,res)=>{
     
@@ -28,16 +34,25 @@ const utiles =require("../libs/utiles.js")
 }
 
  const registrarse=async (req,res)=>{
-    const {usuarioNombre,email,password,roles}=req.body;
-    console.log(usuarioNombre,email,password,roles)
+    const {usuarioNombre,email,password,roles,nombre,apellido,fechaNac,carrera}=req.body;
+    console.log(usuarioNombre,email,password,roles,nombre,apellido,fechaNac,carrera)
     const codigo=utiles.generarCodigo()
-    if (usuarioNombre!="" & email!="" & password!=""){
+    if (usuarioNombre!="" & email!="" & password!="" & nombre!="" & apellido!="" & fechaNac!="" & carrera!="" ){
+       
+        
         //creo nuevo usuario 
         const nuevoUsuario= new usuarioEsquema({
             usuarioNombre,
             email,
             password: await usuarioEsquema.encriptaPassword(password),
             codeValidation:codigo
+        })
+        //crea una nueva persona
+        const fechaNacCast = moment(fechaNac, 'DD/MM/YYYY').format('YYYY-MM-DD');
+        const persona =new Persona({
+            Nombre:nombre,
+            Apellido:apellido,
+            fechaNac:fechaNacCast
         })
    
         if(roles){
@@ -49,33 +64,42 @@ const utiles =require("../libs/utiles.js")
         }
         
         const usuarioCreado= await nuevoUsuario.save();
+        // si el usurio es crado corretamente entonces creo la persona y le sumo la propiedad de referencia hacia el usuario
+        if (usuarioCreado){
+            persona.usuarioID=nuevoUsuario._id;
+            await persona.save()
+        }
         
-        
-        const token=jwt.sign({id:usuarioCreado._id},config.secret.palabraSecreta,{
-        expiresIn:86400 //24 hs esta en segundos
-        }) 
+        //const token=jwt.sign({id:usuarioCreado._id},config.secret.palabraSecreta,{
+        //expiresIn:86400 //24 hs esta en segundos
+       // }) 
        
        const resp= await utiles.enviarCorreo(email,'Codigo de verificacion',`este es el codigo que necesitaras para validar tu cuenta ${codigo}` )
-       console.log(resp) 
        return res.status(200).send("EL EMAIL SE ENVIO CON EXITO")
        
         //return res.status(200).send({token:token})
-    }else return res.status(500).send({mensaje:"Error en los parametros de registro"})
+    }else return res.status(500).send({mensaje:"Error en los parametros de registro, hay datos vacios"})
 }
 
 const validacion=async (req,res)=>{
     const {codeValidation}=req.body
+   if (!codeValidation) {return res.status(400).send({mensaje:"el codigo de validacion no puede ser vacio"})}
     const usuarioEncontrado =await usuarioEsquema.findOne({ codeValidation: codeValidation})
     console.log("Se encontro el usuario "+usuarioEncontrado)
     if (!usuarioEncontrado){{return res.status(400).send({mensaje:"el codigo no es valido"})}}
     usuarioEncontrado.codeValidation=""
-    await usuarioEncontrado.save().then(()=> {
-        const token=jwt.sign({id:usuarioEncontrado._id},config.palabraSecreta,{
-            expiresIn:86400})  //24 hs esta en segundos
+    usuarioEncontrado.save()
+    
+    //si se borro el codigo de validacion entonces ya esta validad retorno token
+    if (usuarioEncontrado.codeValidation===""){    
+        const token=jwt.sign({id:usuarioEncontrado._id},config.secret.palabraSecreta,{
+        expiresIn:86400})  //24 hs esta en segundos
         console.log('La propiedad codeValidation del usuario se actualizó correctamente');
         return res.status(200).send({token:token});
-    }).catch((err)=>{console.log("Error al  realizar la validación")})
-            
+    }
+    
+    
+                
 }
     
 

@@ -1,6 +1,6 @@
 const express = require('express');
-const control=require('../middelwares/control.js')
 const router = express.Router();
+const control=require('../middelwares/control.js')
 const autControles =require( '../controllers/autController.js')
 
 
